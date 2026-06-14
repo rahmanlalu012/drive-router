@@ -69,14 +69,14 @@ Kalau nggak mau ketik perintah, jalankan web console:
 node server.js          # atau: npm run web
 ```
 
-Lalu buka <http://localhost:3000>. Di sana ada:
+Lalu buka <http://localhost:3020>. Di sana ada:
 
 - Tombol **+ Tambah Akun** — login Google langsung dari halaman
 - Kartu tiap akun + bar kuota penyimpanan
 - Tabel semua file dari semua Drive, klik nama file untuk buka di Google Drive
 - Kotak **search** yang mencari lintas semua akun secara realtime
 
-> **Penting:** web console pakai redirect `http://localhost:3000/oauth2callback`. Untuk OAuth client tipe **Desktop app**, redirect `localhost` sudah otomatis diizinkan Google, jadi nggak perlu setting tambahan. Kalau kamu ganti port (`PORT=4000 node server.js`), sesuaikan saja.
+> **Penting:** web console pakai redirect `http://localhost:3020/oauth2callback`. Untuk OAuth client tipe **Desktop app**, redirect `localhost` sudah otomatis diizinkan Google, jadi nggak perlu setting tambahan. Kalau kamu ganti port (`PORT=4000 node server.js`), sesuaikan saja.
 
 CLI dan web console berbagi data yang sama (`~/.drive-router/accounts.json`) — akun yang kamu tambah lewat CLI langsung muncul di web, dan sebaliknya.
 
@@ -89,7 +89,7 @@ CLI dan web console berbagi data yang sama (`~/.drive-router/accounts.json`) —
 | `ls [folderId]` | Gabungan semua file dari semua akun |
 | `search <kata>` | Cari file di semua akun sekaligus |
 | `quota` | Total penyimpanan gabungan |
-| `web` | Jalankan web console di http://localhost:3000 |
+| `web` | Jalankan web console di http://localhost:3020 |
 | `help` | Bantuan |
 
 ## Catatan
