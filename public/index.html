@@ -13,13 +13,13 @@
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text); font-size: 14px; }
   header { display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+    padding: 16px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; }
   header h1 span { color: var(--accent); }
+  .head-actions { display: flex; gap: 10px; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
   .accounts { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-  .acct { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 16px; min-width: 220px; }
+  .acct { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; min-width: 220px; }
   .acct .email { font-weight: 600; margin-bottom: 4px; }
   .acct .quota { color: var(--muted); font-size: 12px; }
   .acct .bar { height: 4px; background: var(--border); border-radius: 4px; margin-top: 8px; overflow: hidden; }
@@ -28,6 +28,7 @@
   button { background: var(--accent); color: #fff; border: none; border-radius: 8px;
     padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer; }
   button:hover { opacity: .9; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
   button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
   input[type=search] { flex: 1; background: var(--panel); border: 1px solid var(--border);
@@ -38,26 +39,43 @@
   tr:hover td { background: var(--panel); }
   td a { color: var(--text); text-decoration: none; }
   td a:hover { color: var(--accent); }
-  .tag { display: inline-block; background: var(--border); color: var(--muted);
-    border-radius: 5px; padding: 2px 8px; font-size: 12px; }
+  .tag { display: inline-block; background: var(--border); color: var(--muted); border-radius: 5px; padding: 2px 8px; font-size: 12px; }
   .size { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   .date { color: var(--muted); font-size: 12px; }
-  .empty, .warn { text-align: center; padding: 40px; color: var(--muted); }
-  .warn { background: var(--panel); border: 1px solid var(--red); border-radius: 10px;
-    color: var(--red); padding: 16px; margin-bottom: 16px; text-align: left; }
+  .empty { text-align: center; padding: 40px; color: var(--muted); }
+  .warn { background: var(--panel); border: 1px solid var(--red); border-radius: 10px; color: var(--red); padding: 16px; margin-bottom: 16px; }
   .loading { color: var(--muted); }
+  .actions { white-space: nowrap; text-align: right; }
+  .actions button { background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 9px; font-size: 12px; border-radius: 6px; margin-left: 4px; }
+  .actions button:hover { color: var(--text); border-color: var(--accent); }
+  select { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 6px; font-size: 12px; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 100; }
+  #toast.show { opacity: 1; }
+  #toast.err { border-color: var(--red); color: var(--red); }
+  #toast.ok { border-color: var(--green); color: var(--green); }
+  #drop { position: fixed; inset: 0; background: rgba(79,140,255,.12); border: 3px dashed var(--accent);
+    display: none; align-items: center; justify-content: center; font-size: 20px; z-index: 50; }
+  #drop.show { display: flex; }
 </style>
 </head>
 <body>
 <header>
   <h1><span>drive</span>-router · web console</h1>
-  <button id="addBtn">+ Tambah Akun</button>
+  <div class="head-actions">
+    <button id="uploadBtn">⬆ Upload</button>
+    <button id="addBtn">+ Tambah Akun</button>
+  </div>
 </header>
+
+<input type="file" id="fileInput" multiple style="display:none" />
+<div id="drop">Lepas file di sini untuk upload</div>
 
 <div class="wrap">
   <div id="credWarn" class="warn" style="display:none">
-    ⚠️ <b>GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET</b> belum diisi di file <code>.env</code>.
-    Isi dulu (lihat README), lalu restart server.
+    ⚠️ <b>GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET</b> belum diisi di file <code>.env</code>. Isi dulu (lihat README), lalu restart server.
   </div>
 
   <div class="accounts" id="accounts"></div>
@@ -70,8 +88,11 @@
   <div id="content"><div class="loading">Memuat…</div></div>
 </div>
 
+<div id="toast"></div>
+
 <script>
 const $ = (s) => document.querySelector(s);
+let accountList = [];
 
 function fmtBytes(n) {
   if (n == null) return "—";
@@ -80,16 +101,22 @@ function fmtBytes(n) {
   return n.toFixed(i?1:0) + u[i];
 }
 function isFolder(m) { return m === "application/vnd.google-apps.folder"; }
+function toast(msg, kind) {
+  const t = $("#toast"); t.textContent = msg; t.className = "show " + (kind||"");
+  setTimeout(() => { t.className = ""; }, 3000);
+}
 
 async function loadConfig() {
   const { hasCredentials } = await (await fetch("/api/config")).json();
   $("#credWarn").style.display = hasCredentials ? "none" : "block";
   $("#addBtn").disabled = !hasCredentials;
+  $("#uploadBtn").disabled = !hasCredentials;
 }
 
 async function loadAccounts() {
   const el = $("#accounts");
   const { accounts } = await (await fetch("/api/accounts")).json();
+  accountList = accounts.filter(a => a.ok).map(a => a.email);
   if (!accounts.length) { el.innerHTML = '<div class="acct"><div class="email">Belum ada akun</div><div class="quota">Klik "Tambah Akun"</div></div>'; return; }
   el.innerHTML = accounts.map(a => {
     if (!a.ok) return `<div class="acct err"><div class="email">${a.email}</div><div class="quota">token error — tambah ulang</div></div>`;
@@ -101,49 +128,82 @@ async function loadAccounts() {
   }).join("");
 }
 
-let allFiles = [];
 async function loadFiles(q) {
   $("#content").innerHTML = '<div class="loading">Memuat file…</div>';
   const url = "/api/files" + (q ? "?q=" + encodeURIComponent(q) : "");
   const { files, errors } = await (await fetch(url)).json();
-  allFiles = files;
   render(files, errors);
 }
 
 function render(files, errors) {
   let html = "";
-  if (errors && errors.length) {
-    html += '<div class="warn">' + errors.map(e => `${e.email}: ${e.error}`).join("<br>") + "</div>";
-  }
+  if (errors && errors.length) html += '<div class="warn">' + errors.map(e => `${e.email}: ${e.error}`).join("<br>") + "</div>";
   if (!files.length) { $("#content").innerHTML = html + '<div class="empty">Tidak ada file.</div>'; return; }
-  html += `<table><thead><tr><th>Nama</th><th>Akun</th><th class="size">Ukuran</th><th>Diubah</th></tr></thead><tbody>`;
+  html += `<table><thead><tr><th>Nama</th><th>Akun</th><th class="size">Ukuran</th><th>Diubah</th><th></th></tr></thead><tbody>`;
   html += files.map(f => {
     const icon = isFolder(f.mimeType) ? "📁" : "📄";
-    const name = f.webViewLink ? `<a href="${f.webViewLink}" target="_blank">${icon} ${f.name}</a>` : `${icon} ${f.name}`;
+    const name = f.webViewLink ? `<a href="${f.webViewLink}" target="_blank">${icon} ${esc(f.name)}</a>` : `${icon} ${esc(f.name)}`;
     const size = isFolder(f.mimeType) ? "—" : fmtBytes(f.size);
-    const acct = f.account.split("@")[0];
-    return `<tr><td>${name}</td><td><span class="tag">${acct}</span></td>
-      <td class="size">${size}</td><td class="date">${(f.modifiedTime||"").slice(0,10)}</td></tr>`;
+    const others = accountList.filter(a => a !== f.account);
+    const moveSel = others.length
+      ? `<select onchange="moveFile('${f.id}','${f.account}',this.value,this)"><option value="">Pindah ke…</option>${others.map(a=>`<option value="${a}">${a.split("@")[0]}</option>`).join("")}</select>`
+      : "";
+    const actions = isFolder(f.mimeType) ? "" :
+      `<div class="actions">${moveSel}
+        <button onclick="dl('${f.id}','${f.account}')">⬇</button>
+        <button onclick="delFile('${f.id}','${f.account}','${esc(f.name)}')">🗑</button></div>`;
+    return `<tr><td>${name}</td><td><span class="tag">${f.account.split("@")[0]}</span></td>
+      <td class="size">${size}</td><td class="date">${(f.modifiedTime||"").slice(0,10)}</td><td>${actions}</td></tr>`;
   }).join("");
   html += "</tbody></table>";
   $("#content").innerHTML = html;
 }
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;"); }
+
+function dl(id, account) { window.location = `/api/download?id=${id}&account=${encodeURIComponent(account)}`; }
+
+async function delFile(id, account, name) {
+  if (!confirm(`Hapus "${name}" dari ${account}?`)) return;
+  const r = await fetch(`/api/file?id=${id}&account=${encodeURIComponent(account)}`, { method: "DELETE" });
+  if (r.ok) { toast("Terhapus", "ok"); refresh(); } else { toast("Gagal hapus", "err"); }
+}
+
+async function moveFile(fileId, from, to, sel) {
+  if (!to) return;
+  sel.disabled = true;
+  toast(`Memindah ke ${to.split("@")[0]}…`);
+  const r = await fetch("/api/transfer", { method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ fileId, from, to, move: true }) });
+  if (r.ok) { toast("Dipindahkan", "ok"); refresh(); } else { const e = await r.json(); toast("Gagal: " + (e.error||""), "err"); sel.disabled = false; }
+}
+
+async function uploadFiles(fileList) {
+  for (const file of fileList) {
+    toast(`Upload ${file.name}…`);
+    const r = await fetch(`/api/upload?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    if (r.ok) { const d = await r.json(); toast(`✓ ${file.name} → ${d.account.split("@")[0]}`, "ok"); }
+    else { const e = await r.json().catch(()=>({})); toast(`Gagal upload ${file.name}: ${e.error||""}`, "err"); }
+  }
+  refresh();
+}
+
+function refresh() { loadAccounts(); loadFiles($("#search").value.trim()); }
 
 $("#addBtn").onclick = () => { window.location = "/api/auth/start"; };
-$("#refreshBtn").onclick = () => { loadAccounts(); loadFiles($("#search").value.trim()); };
+$("#uploadBtn").onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = (e) => { if (e.target.files.length) uploadFiles(e.target.files); e.target.value = ""; };
+$("#refreshBtn").onclick = refresh;
 
 let timer;
-$("#search").oninput = (e) => {
-  clearTimeout(timer);
-  const q = e.target.value.trim();
-  timer = setTimeout(() => loadFiles(q), 350);
-};
+$("#search").oninput = (e) => { clearTimeout(timer); const q = e.target.value.trim(); timer = setTimeout(() => loadFiles(q), 350); };
 
-(async () => {
-  await loadConfig();
-  await loadAccounts();
-  await loadFiles("");
-})();
+// Drag & drop upload
+const drop = $("#drop");
+window.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("show"); });
+window.addEventListener("dragleave", (e) => { if (e.relatedTarget === null) drop.classList.remove("show"); });
+window.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("show"); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
+
+(async () => { await loadConfig(); await loadAccounts(); await loadFiles(""); })();
 </script>
 </body>
 </html>
