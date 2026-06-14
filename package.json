@@ -1,0 +1,27 @@
+{
+  "name": "drive-router",
+  "version": "1.0.0",
+  "description": "Router CLI yang menggabungkan banyak akun Google Drive (per email) jadi satu tampilan terpadu.",
+  "type": "module",
+  "bin": {
+    "drive-router": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "add": "node index.js add",
+    "accounts": "node index.js accounts",
+    "ls": "node index.js ls",
+    "search": "node index.js search",
+    "quota": "node index.js quota",
+    "web": "node server.js",
+    "serve": "node server.js"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "open": "^10.1.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
