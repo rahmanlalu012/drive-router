@@ -1,6 +1,6 @@
 # drive-router
 
-CLI yang menggabungkan banyak akun Google Drive (per email) jadi **satu tampilan terpadu**. Tambah akun sebanyak yang kamu mau, lalu lihat / cari semua file dari semua Drive dalam satu daftar.
+CLI **dan** web console yang menggabungkan banyak akun Google Drive (per email) jadi **satu drive virtual**. Lihat & cari semua file dari semua akun dalam satu daftar, **upload** otomatis ke akun yang paling lega, **pindahkan** file antar akun, dan **sebar** isi folder ke beberapa Drive sekaligus.
 
 ```
 📄   1.2MB  2026-06-14  [budi]      laporan-q2.pdf
@@ -89,12 +89,16 @@ CLI dan web console berbagi data yang sama (`~/.drive-router/accounts.json`) —
 | `ls [folderId]` | Gabungan semua file dari semua akun |
 | `search <kata>` | Cari file di semua akun sekaligus |
 | `quota` | Total penyimpanan gabungan |
+| `upload <file> [--to email]` | Upload file; default ke akun paling lega |
+| `transfer <id> --from <e> --to <e> [--move]` | Salin/pindah file antar akun |
+| `push <folder>` | Sebar semua file di folder ke akun-akun (by ruang) |
 | `web` | Jalankan web console di http://localhost:3020 |
 | `help` | Bantuan |
 
 ## Catatan
 
-- **Read-only.** Scope yang diminta cuma `drive.metadata.readonly` — tool ini hanya membaca daftar file, tidak bisa hapus/ubah. Aman.
+- **Read-write.** Scope `drive` (penuh) — bisa baca, upload, pindah, hapus. Hati-hati: `transfer --move` dan tombol 🗑 menghapus file asli.
+- **Upgrade dari versi read-only?** Scope berubah jadi penuh, jadi tiap akun harus di-`add` ulang sekali supaya dapat izin tulis. Akun lama tetap kelihatan tapi upload/pindah/hapus akan gagal sampai di-add ulang.
 - Token disimpan lokal di `~/.drive-router/accounts.json` (permission 600). Jangan dibagikan.
 - Kolom `[nama]` di daftar = bagian depan email akun, biar tahu file dari Drive mana.
 - Refresh token otomatis; nggak perlu login ulang tiap kali.
@@ -102,7 +106,7 @@ CLI dan web console berbagi data yang sama (`~/.drive-router/accounts.json`) —
 
 ## Pengembangan lanjutan (kalau mau)
 
-- Download / transfer file antar akun (butuh scope penuh `drive`)
 - Filter per tipe file (`--type pdf`)
 - Export daftar ke CSV
 - Mode interaktif (TUI) buat navigasi folder
+- Sinkronisasi folder lokal otomatis (watch)
