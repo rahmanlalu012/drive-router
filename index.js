@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
 import { URL } from "node:url";
 import open from "open";
 import {
   hasCredentials, makeOAuthClient, authUrl, exchangeAndSave,
-  loadAccounts, clientForAccount, gatherAll, accountQuota, fmtBytes, isFolder,
+  loadAccounts, gatherAll, accountQuota, fmtBytes, isFolder,
+  uploadFile, transferFile, pickBestAccount, freeBytes, listFromAccount, deleteFile,
 } from "./core.js";
 import { google } from "googleapis";
 
@@ -125,6 +128,77 @@ async function cmdQuota() {
   console.log(`  ${color("bold", "TOTAL".padEnd(34))} ${color("green", fmtBytes(totalUsed))} / ${unlimited ? "∞" : fmtBytes(totalLimit)}\n`);
 }
 
+function parseFlags(args) {
+  const flags = {}, pos = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith("--")) {
+      const key = a.slice(2);
+      const next = args[i + 1];
+      if (next && !next.startsWith("--")) { flags[key] = next; i++; } else flags[key] = true;
+    } else pos.push(a);
+  }
+  return { flags, pos };
+}
+
+async function cmdUpload(args) {
+  requireCredentials();
+  const { flags, pos } = parseFlags(args);
+  const localPath = pos[0];
+  if (!localPath) { console.log(color("yellow", "Pakai: drive-router upload <file> [--to email]")); return; }
+  if (!fs.existsSync(localPath)) { console.log(color("red", "File tidak ada: " + localPath)); return; }
+  const size = fs.statSync(localPath).size;
+  const target = flags.to || await pickBestAccount(REDIRECT_URI, size);
+  if (!target) { console.log(color("yellow", "Belum ada akun. Jalankan: drive-router add")); return; }
+  console.log(color("dim", `Upload ${path.basename(localPath)} (${fmtBytes(size)}) -> ${target}...`));
+  const res = await uploadFile(target, { localPath, name: path.basename(localPath) }, REDIRECT_URI);
+  console.log(color("green", `✓ Terupload ke ${target}`));
+  if (res.webViewLink) console.log(color("dim", "  " + res.webViewLink));
+}
+
+async function cmdTransfer(args) {
+  requireCredentials();
+  const { flags, pos } = parseFlags(args);
+  const fileId = pos[0];
+  if (!fileId || !flags.from || !flags.to) {
+    console.log(color("yellow", "Pakai: drive-router transfer <fileId> --from <email> --to <email> [--move]"));
+    return;
+  }
+  console.log(color("dim", `${flags.move ? "Pindah" : "Salin"} ${fileId}: ${flags.from} -> ${flags.to}...`));
+  const res = await transferFile({ fileId, from: flags.from, to: flags.to, move: Boolean(flags.move) }, REDIRECT_URI);
+  console.log(color("green", `✓ ${res.moved ? "Dipindah" : "Disalin"} ke ${flags.to}${res.exported ? " (di-export dari Google Docs)" : ""}`));
+  if (res.webViewLink) console.log(color("dim", "  " + res.webViewLink));
+}
+
+async function cmdPush(args) {
+  requireCredentials();
+  const { pos } = parseFlags(args);
+  const folder = pos[0];
+  if (!folder || !fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+    console.log(color("yellow", "Pakai: drive-router push <folder>")); return;
+  }
+  const entries = fs.readdirSync(folder)
+    .map((n) => path.join(folder, n))
+    .filter((p) => fs.statSync(p).isFile())
+    .map((p) => ({ p, size: fs.statSync(p).size }))
+    .sort((a, b) => b.size - a.size);
+  if (!entries.length) { console.log(color("yellow", "Folder kosong.")); return; }
+  console.log(color("bold", `\nMenyebar ${entries.length} file ke akun paling lega...\n`));
+  let ok = 0;
+  for (const { p, size } of entries) {
+    const target = await pickBestAccount(REDIRECT_URI, size);
+    if (!target) { console.log(color("red", `  ! ${path.basename(p)}: tak ada akun muat`)); continue; }
+    try {
+      await uploadFile(target, { localPath: p, name: path.basename(p) }, REDIRECT_URI);
+      console.log(`  ${color("green", "✓")} ${path.basename(p).padEnd(36)} ${fmtBytes(size).padStart(8)}  -> ${target}`);
+      ok++;
+    } catch (e) {
+      console.log(`  ${color("red", "✗")} ${path.basename(p)}: ${e.message}`);
+    }
+  }
+  console.log(color("dim", `\n  ${ok}/${entries.length} file terupload.\n`));
+}
+
 function cmdHelp() {
   console.log(`
 ${color("bold", "drive-router")} — gabungkan banyak Google Drive (per email) jadi satu.
@@ -136,6 +210,9 @@ ${color("bold", "Perintah:")}
   ${color("cyan", "search")} <kata>       Cari file lintas semua akun
   ${color("cyan", "quota")}               Total penyimpanan gabungan
   ${color("cyan", "web")}                 Jalankan web console (buka http://localhost:3020)
+  ${color("cyan", "upload")} <file> [--to email]   Upload file (default: akun paling lega)
+  ${color("cyan", "transfer")} <id> --from <e> --to <e> [--move]   Pindah/salin antar akun
+  ${color("cyan", "push")} <folder>          Sebar semua file di folder ke akun-akun (by ruang)
   ${color("cyan", "help")}                Tampilkan bantuan ini
 
 ${color("dim", "Web console: node server.js  (atau npm run web)")}
@@ -152,6 +229,9 @@ async function main() {
       case "ls": case "list": await cmdLs(args); break;
       case "search": case "find": await cmdSearch(args); break;
       case "quota": case "storage": await cmdQuota(); break;
+      case "upload": case "up": await cmdUpload(args); break;
+      case "transfer": case "mv": case "move": await cmdTransfer(args); break;
+      case "push": case "distribute": await cmdPush(args); break;
       case "web": case "serve":
         await import("./server.js");
         break;
