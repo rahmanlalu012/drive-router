@@ -83,6 +83,10 @@ Lalu buka <http://localhost:3020>. Pertama kali kamu diminta **password** (defau
 
 CLI dan web console berbagi data yang sama (`~/.drive-router/accounts.json`) — akun yang kamu tambah lewat CLI langsung muncul di web, dan sebaliknya.
 
+### Hosting online (VPS)
+
+Mau diakses dari mana saja, bukan cuma localhost? Lihat panduan lengkap di **[DEPLOY-VPS.md](DEPLOY-VPS.md)** — setup domain + HTTPS, OAuth tipe Web application, pm2, dan Nginx. Singkatnya: set `BASE_URL=https://domainmu.com` di `.env`, dan daftarkan redirect `https://domainmu.com/oauth2callback` di Google Console.
+
 ## Perintah
 
 | Perintah | Fungsi |
