@@ -135,7 +135,7 @@ ${color("bold", "Perintah:")}
   ${color("cyan", "ls")} [folderId]       Lihat semua file dari semua akun (terbaru dulu)
   ${color("cyan", "search")} <kata>       Cari file lintas semua akun
   ${color("cyan", "quota")}               Total penyimpanan gabungan
-  ${color("cyan", "web")}                 Jalankan web console (buka http://localhost:3000)
+  ${color("cyan", "web")}                 Jalankan web console (buka http://localhost:3020)
   ${color("cyan", "help")}                Tampilkan bantuan ini
 
 ${color("dim", "Web console: node server.js  (atau npm run web)")}
