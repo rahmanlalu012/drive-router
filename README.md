@@ -69,12 +69,15 @@ Kalau nggak mau ketik perintah, jalankan web console:
 node server.js          # atau: npm run web
 ```
 
-Lalu buka <http://localhost:3020>. Di sana ada:
+Lalu buka <http://localhost:3020>. Pertama kali kamu diminta **password** (default `12345678`, ganti lewat `DRIVE_ROUTER_PASSWORD` di `.env`). Setelah login, di dalamnya ada:
 
 - Tombol **+ Tambah Akun** — login Google langsung dari halaman
 - Kartu tiap akun + bar kuota penyimpanan
 - Tabel semua file dari semua Drive, klik nama file untuk buka di Google Drive
 - Kotak **search** yang mencari lintas semua akun secara realtime
+- **⬆ Upload** (atau drag-and-drop) — file masuk ke akun paling lega otomatis
+- Tiap file: **Pindah ke…** akun lain, **⬇** download, **🗑** hapus
+- Tombol **Keluar** untuk logout
 
 > **Penting:** web console pakai redirect `http://localhost:3020/oauth2callback`. Untuk OAuth client tipe **Desktop app**, redirect `localhost` sudah otomatis diizinkan Google, jadi nggak perlu setting tambahan. Kalau kamu ganti port (`PORT=4000 node server.js`), sesuaikan saja.
 
