@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>drive-router · web console</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --border: #262b35; --text: #e6e8ec;
+    --muted: #8b93a1; --accent: #4f8cff; --green: #34d399; --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 span { color: var(--accent); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .accounts { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .acct { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; min-width: 220px; }
+  .acct .email { font-weight: 600; margin-bottom: 4px; }
+  .acct .quota { color: var(--muted); font-size: 12px; }
+  .acct .bar { height: 4px; background: var(--border); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .acct .bar > div { height: 100%; background: var(--accent); }
+  .acct.err { border-color: var(--red); }
+  button { background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  button:hover { opacity: .9; }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+  input[type=search] { flex: 1; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 14px; color: var(--text); font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr:hover td { background: var(--panel); }
+  td a { color: var(--text); text-decoration: none; }
+  td a:hover { color: var(--accent); }
+  .tag { display: inline-block; background: var(--border); color: var(--muted);
+    border-radius: 5px; padding: 2px 8px; font-size: 12px; }
+  .size { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .date { color: var(--muted); font-size: 12px; }
+  .empty, .warn { text-align: center; padding: 40px; color: var(--muted); }
+  .warn { background: var(--panel); border: 1px solid var(--red); border-radius: 10px;
+    color: var(--red); padding: 16px; margin-bottom: 16px; text-align: left; }
+  .loading { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>drive</span>-router · web console</h1>
+  <button id="addBtn">+ Tambah Akun</button>
+</header>
+
+<div class="wrap">
+  <div id="credWarn" class="warn" style="display:none">
+    ⚠️ <b>GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET</b> belum diisi di file <code>.env</code>.
+    Isi dulu (lihat README), lalu restart server.
+  </div>
+
+  <div class="accounts" id="accounts"></div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Cari file di semua akun…" />
+    <button class="ghost" id="refreshBtn">↻ Muat ulang</button>
+  </div>
+
+  <div id="content"><div class="loading">Memuat…</div></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+function fmtBytes(n) {
+  if (n == null) return "—";
+  const u = ["B","KB","MB","GB","TB"]; let i = 0;
+  while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
+  return n.toFixed(i?1:0) + u[i];
+}
+function isFolder(m) { return m === "application/vnd.google-apps.folder"; }
+
+async function loadConfig() {
+  const { hasCredentials } = await (await fetch("/api/config")).json();
+  $("#credWarn").style.display = hasCredentials ? "none" : "block";
+  $("#addBtn").disabled = !hasCredentials;
+}
+
+async function loadAccounts() {
+  const el = $("#accounts");
+  const { accounts } = await (await fetch("/api/accounts")).json();
+  if (!accounts.length) { el.innerHTML = '<div class="acct"><div class="email">Belum ada akun</div><div class="quota">Klik "Tambah Akun"</div></div>'; return; }
+  el.innerHTML = accounts.map(a => {
+    if (!a.ok) return `<div class="acct err"><div class="email">${a.email}</div><div class="quota">token error — tambah ulang</div></div>`;
+    const pct = a.limit ? Math.min(100, a.usage/a.limit*100) : 0;
+    const limit = a.limit ? fmtBytes(a.limit) : "∞";
+    return `<div class="acct"><div class="email">${a.email}</div>
+      <div class="quota">${fmtBytes(a.usage)} / ${limit}</div>
+      <div class="bar"><div style="width:${pct}%"></div></div></div>`;
+  }).join("");
+}
+
+let allFiles = [];
+async function loadFiles(q) {
+  $("#content").innerHTML = '<div class="loading">Memuat file…</div>';
+  const url = "/api/files" + (q ? "?q=" + encodeURIComponent(q) : "");
+  const { files, errors } = await (await fetch(url)).json();
+  allFiles = files;
+  render(files, errors);
+}
+
+function render(files, errors) {
+  let html = "";
+  if (errors && errors.length) {
+    html += '<div class="warn">' + errors.map(e => `${e.email}: ${e.error}`).join("<br>") + "</div>";
+  }
+  if (!files.length) { $("#content").innerHTML = html + '<div class="empty">Tidak ada file.</div>'; return; }
+  html += `<table><thead><tr><th>Nama</th><th>Akun</th><th class="size">Ukuran</th><th>Diubah</th></tr></thead><tbody>`;
+  html += files.map(f => {
+    const icon = isFolder(f.mimeType) ? "📁" : "📄";
+    const name = f.webViewLink ? `<a href="${f.webViewLink}" target="_blank">${icon} ${f.name}</a>` : `${icon} ${f.name}`;
+    const size = isFolder(f.mimeType) ? "—" : fmtBytes(f.size);
+    const acct = f.account.split("@")[0];
+    return `<tr><td>${name}</td><td><span class="tag">${acct}</span></td>
+      <td class="size">${size}</td><td class="date">${(f.modifiedTime||"").slice(0,10)}</td></tr>`;
+  }).join("");
+  html += "</tbody></table>";
+  $("#content").innerHTML = html;
+}
+
+$("#addBtn").onclick = () => { window.location = "/api/auth/start"; };
+$("#refreshBtn").onclick = () => { loadAccounts(); loadFiles($("#search").value.trim()); };
+
+let timer;
+$("#search").oninput = (e) => {
+  clearTimeout(timer);
+  const q = e.target.value.trim();
+  timer = setTimeout(() => loadFiles(q), 350);
+};
+
+(async () => {
+  await loadConfig();
+  await loadAccounts();
+  await loadFiles("");
+})();
+</script>
+</body>
+</html>
