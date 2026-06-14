@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath, URL } from "node:url";
 import {
   hasCredentials, makeOAuthClient, authUrl, exchangeAndSave,
@@ -12,6 +13,11 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3020);
 const REDIRECT_URI = `http://localhost:${PORT}/oauth2callback`;
+
+// Password gerbang web console. Default 12345678, bisa diganti via .env (DRIVE_ROUTER_PASSWORD).
+const PASSWORD = process.env.DRIVE_ROUTER_PASSWORD || "12345678";
+const AUTH_TOKEN = crypto.createHash("sha256").update("drive-router|" + PASSWORD).digest("hex").slice(0, 32);
+const PUBLIC_PATHS = new Set(["/login", "/api/login"]);
 
 function json(res, code, data) {
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
@@ -47,13 +53,51 @@ function streamToTmp(req) {
   });
 }
 
+function parseCookies(req) {
+  const h = req.headers.cookie || "";
+  const out = {};
+  for (const part of h.split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+function isAuthed(req) { return parseCookies(req)["dr_auth"] === AUTH_TOKEN; }
+
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, REDIRECT_URI);
     const p = u.pathname;
     const m = req.method;
 
+    // --- Auth gate ---
+    if (p === "/api/login" && m === "POST") {
+      const body = await readJsonBody(req);
+      if (body.password === PASSWORD) {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Set-Cookie": `dr_auth=${AUTH_TOKEN}; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000`,
+        });
+        return res.end(JSON.stringify({ ok: true }));
+      }
+      return json(res, 401, { error: "Password salah" });
+    }
+    if (p === "/login") return sendFile(res, "login.html", "text/html; charset=utf-8");
+
+    if (!PUBLIC_PATHS.has(p) && !isAuthed(req)) {
+      if (p.startsWith("/api/")) return json(res, 401, { error: "Belum login" });
+      res.writeHead(302, { Location: "/login" });
+      return res.end();
+    }
+
+    // --- Protected routes ---
     if (p === "/" || p === "/index.html") return sendFile(res, "index.html", "text/html; charset=utf-8");
+
+    if (p === "/api/logout") {
+      res.writeHead(302, { Location: "/login", "Set-Cookie": "dr_auth=; HttpOnly; Path=/; Max-Age=0" });
+      return res.end();
+    }
 
     if (p === "/api/config") return json(res, 200, { hasCredentials: hasCredentials() });
 
@@ -99,8 +143,7 @@ const server = http.createServer(async (req, res) => {
       return res.end();
     }
 
-    // ---- Write endpoints ----
-
+    // --- Write endpoints ---
     if (p === "/api/upload" && m === "POST") {
       const name = u.searchParams.get("name") || "upload.bin";
       let account = u.searchParams.get("account") || null;
@@ -157,7 +200,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n  drive-router web console berjalan di:  http://localhost:${PORT}\n`);
+  console.log(`\n  drive-router web console berjalan di:  http://localhost:${PORT}`);
+  console.log(`  Login dengan password: ${process.env.DRIVE_ROUTER_PASSWORD ? "(dari .env)" : "12345678 (default)"}\n`);
   if (!hasCredentials()) {
     console.log("  ⚠️  GOOGLE_CLIENT_ID / SECRET belum diisi di .env — isi dulu sebelum tambah akun.\n");
   }
