@@ -12,7 +12,9 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3020);
-const REDIRECT_URI = `http://localhost:${PORT}/oauth2callback`;
+// BASE_URL = alamat publik web console (untuk redirect OAuth). Default localhost.
+const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, "");
+const REDIRECT_URI = `${BASE_URL}/oauth2callback`;
 
 // Password gerbang web console. Default 12345678, bisa diganti via .env (DRIVE_ROUTER_PASSWORD).
 const PASSWORD = process.env.DRIVE_ROUTER_PASSWORD || "12345678";
